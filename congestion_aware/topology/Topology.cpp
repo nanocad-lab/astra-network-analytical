@@ -81,12 +81,9 @@ void Topology::connect(const DeviceId src,
     assert(latency >= 0);
 
     // connect src -> dest
-    if (src == 2 || src == 14){
-        devices.at(src)->connect(dest, bandwidth * 0.9, latency);
-    }
-    else{
-        devices.at(src)->connect(dest, bandwidth, latency);
-    }
+    
+    devices.at(src)->connect(dest, bandwidth, latency);
+    
 
     // if bidirectional, connect dest -> src
     if (bidirectional) {

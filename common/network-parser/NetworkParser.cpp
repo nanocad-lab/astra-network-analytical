@@ -15,6 +15,7 @@ NetworkParser::NetworkParser(const std::string& path) noexcept : dims_count(-1) 
     bandwidth_per_dim = {};
     latency_per_dim = {};
     topology_per_dim = {};
+    faulty_links = {};
 
     try {
         // load network config file
@@ -62,6 +63,9 @@ std::vector<TopologyBuildingBlock> NetworkParser::get_topologies_per_dim() const
 
     return topology_per_dim;
 }
+std::vector<std::tuple<int, int, double>> NetworkParser::get_faulty_links() const noexcept {
+    return faulty_links;
+}
 
 void NetworkParser::parse_network_config_yml(const YAML::Node& network_config) noexcept {
     // parse topology_per_dim
@@ -81,6 +85,21 @@ void NetworkParser::parse_network_config_yml(const YAML::Node& network_config) n
 
     // check the validity of the parsed network config
     check_validity();
+
+    //faulty link support
+    if (network_config["faulty_links"]) {
+        for (const auto& link_node : network_config["faulty_links"]) {
+            if (link_node.IsSequence() && link_node.size() >= 3) {
+                std::cout<<"the source is"<< link_node[0] << "and dest is"<<link_node[1]<<"fault rate is:"<<link_node[2]<<std::endl;
+                int src = link_node[0].as<int>();
+                int dst = link_node[1].as<int>();
+                double reliability = link_node[2].as<double>();
+                faulty_links.emplace_back(src, dst, reliability);
+            } else {
+                std::cerr << "[Warning] (network/analytical) Invalid faulty_links format. Expected [src, dst, weight].\n";
+            }
+        }
+    }
 }
 
 TopologyBuildingBlock NetworkParser::parse_topology_name(const std::string& topology_name) noexcept {

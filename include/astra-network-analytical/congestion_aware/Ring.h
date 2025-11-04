@@ -20,30 +20,35 @@ namespace NetworkAnalyticalCongestionAware {
  * |           |
  * 7 - 6 - 5 - 4
  *
- * Therefore, the number of NPUs and devices are both 8.
- *
- * If ring is uni-directional, then each chunk can flow through:
- * 0 -> 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 0
- *
- * If the ring is bi-directional, then each chunk can flow through:
- * 0 -> 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 0
- * 0 <- 1 <- 2 <- 3 <- 4 <- 5 <- 6 <- 7 <- 0
+ * The number of NPUs and devices are both 8.
  */
 class Ring final : public BasicTopology {
-  public:
+ public:
     /**
      * Constructor.
      *
      * @param npus_count number of npus in a ring
      * @param bandwidth bandwidth of link
      * @param latency latency of link
-     * @param bidirectional true if ring is bidirectional, false otherwise
+     * @param bidirectional true if ring is bidirectional
+     * @param is_multi_dim  true if part of multidimensional topology
+     * @param faulty_links  list of faulty links as tuples (src, dst, weight)
      */
     Ring(int npus_count,
          Bandwidth bandwidth,
          Latency latency,
          bool bidirectional = true,
-         bool is_multi_dim = false) noexcept;
+         bool is_multi_dim = false,
+         const std::vector<std::tuple<int, int, double>>& faulty_links = {}) noexcept;
+
+    /**
+     * Alternate constructor for convenience
+     */
+    Ring(int npus_count,
+         Bandwidth bandwidth,
+         Latency latency,
+         const std::vector<std::tuple<int, int, double>>& faulty_links) noexcept
+        : Ring(npus_count, bandwidth, latency, true, false, faulty_links) {}
 
     /**
      * Implementation of route function in Topology.
@@ -52,17 +57,14 @@ class Ring final : public BasicTopology {
 
     /**
      * Get connection policies of the ring topology.
-     * Each connection policy is represented as a pair of (src, dest) device ids.
-     * For a 4-node ring, the connection policies are:
-     * - if bidirectional: (0,1), (1,2), (2,3), (3,0), (1,0), (2,1), (3,2), (0,3)
-     *
-     * @return list of connection policies
      */
     [[nodiscard]] std::vector<ConnectionPolicy> get_connection_policies() const noexcept override;
 
-  private:
-    /// true if the ring is bidirectional, false otherwise
+ private:
+    double fault_derate(int src, int dst) const;
+
     bool bidirectional;
+    std::vector<std::tuple<int, int, double>> faulty_links;
 };
 
 }  // namespace NetworkAnalyticalCongestionAware

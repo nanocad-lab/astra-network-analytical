@@ -21,56 +21,51 @@ namespace NetworkAnalyticalCongestionAware {
  *     |   |   |   | 
  *    _7 - 6 - 5 - 4_
  *   |_______________|
- *
- * The number of NPUs and devices are both 8.
- *
- * If ring is uni-directional, then each chunk can flow through:
- * 0 -> 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 0
- *
- * If the ring is bi-directional, then each chunk can flow through:
- * 0 -> 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 0
- * 0 <- 1 <- 2 <- 3 <- 4 <- 5 <- 6 <- 7 <- 0
  */
 class Torus2D final : public BasicTopology {
-  public:
-    /**
-     * Constructor.
-     *
-     * @param npus_count number of npus in a ring
-     * @param bandwidth bandwidth of link
-     * @param latency latency of link
-     * @param bidirectional true if ring is bidirectional, false otherwise
-     */
-    Torus2D(int npus_count,
-         Bandwidth bandwidth,
-         Latency latency,
-         bool bidirectional = true,
-         bool is_multi_dim = false) noexcept;
+ public:
+  /**
+   * Constructor.
+   *
+   * @param npus_count number of npus in the torus (dim × dim)
+   * @param bandwidth  link bandwidth
+   * @param latency    link latency
+   * @param bidirectional true if torus is bidirectional
+   * @param is_multi_dim  true if part of multidimensional topology
+   * @param faulty_links  list of faulty links as tuples (src, dst, weight)
+   */
+  Torus2D(int npus_count,
+          Bandwidth bandwidth,
+          Latency latency,
+          bool bidirectional = true,
+          bool is_multi_dim = false,
+          const std::vector<std::tuple<int, int, double>>& faulty_links = {}) noexcept;
 
-    /**
-     * Implementation of route function in Topology.
-     */
-    [[nodiscard]] Route route(DeviceId src, DeviceId dest) const noexcept override;
+  /**
+   * Alternate constructor for convenience (used by Helper.cpp)
+   */
+  Torus2D(int npus_count,
+          Bandwidth bandwidth,
+          Latency latency,
+          const std::vector<std::tuple<int, int, double>>& faulty_links) noexcept
+      : Torus2D(npus_count, bandwidth, latency, true, false, faulty_links) {}
 
-    /**
-     * Get connection policies of the ring topology.
-     * Each connection policy is represented as a pair of (src, dest) device ids.
-     * For a 4-node ring, the connection policies are:
-     * - if bidirectional: (0,1), (1,2), (2,3), (3,0), (1,0), (2,1), (3,2), (0,3)
-     *
-     * @return list of connection policies
-     */
-    [[nodiscard]] std::vector<ConnectionPolicy> get_connection_policies() const noexcept override;
+  /**
+   * Implementation of route function in Topology.
+   */
+  [[nodiscard]] Route route(DeviceId src, DeviceId dest) const noexcept override;
 
-  private:
+  /**
+   * Get connection policies of the torus topology.
+   */
+  [[nodiscard]] std::vector<ConnectionPolicy> get_connection_policies() const noexcept override;
 
-    bool is_faulty(int src, int dst) const;
-    /// true if the ring is bidirectional, false otherwise
-    bool bidirectional;
+ private:
+  //bool is_down(int src, int dst) const;
+  double fault_derate(int src, int dst) const;
 
-    std::vector<std::pair<int, int> > faulty_links;
-
-
+  bool bidirectional;
+  std::vector<std::tuple<int, int, double>> faulty_links;
 };
 
 }  // namespace NetworkAnalyticalCongestionAware

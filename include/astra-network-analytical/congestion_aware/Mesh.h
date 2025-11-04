@@ -23,16 +23,32 @@ namespace NetworkAnalyticalCongestionAware {
  * 0 <- 1 <- 2 <- 3
  */
 class Mesh final : public BasicTopology {
-  public:
+ public:
     /**
      * Constructor.
      *
-     * @param npus_count number of npus in a mesh
+     * @param npus_count number of npus in a ring
      * @param bandwidth bandwidth of link
      * @param latency latency of link
-     * @param bidirectional true if mesh is bidirectional, false otherwise
+     * @param bidirectional true if ring is bidirectional
+     * @param is_multi_dim  true if part of multidimensional topology
+     * @param faulty_links  list of faulty links as tuples (src, dst, weight)
      */
-    Mesh(int npus_count, Bandwidth bandwidth, Latency latency, bool is_multi_dim = false) noexcept;
+    Mesh(int npus_count,
+         Bandwidth bandwidth,
+         Latency latency,
+         bool bidirectional = true,
+         bool is_multi_dim = false,
+         const std::vector<std::tuple<int, int, double>>& faulty_links = {}) noexcept;
+
+    /**
+     * Alternate constructor for convenience
+     */
+    Mesh(int npus_count,
+         Bandwidth bandwidth,
+         Latency latency,
+         const std::vector<std::tuple<int, int, double>>& faulty_links) noexcept
+        : Mesh(npus_count, bandwidth, latency, true, false, faulty_links) {}
 
     /**
      * Implementation of route function in Topology.
@@ -48,6 +64,15 @@ class Mesh final : public BasicTopology {
      * @return list of connection policies
      */
     [[nodiscard]] std::vector<ConnectionPolicy> get_connection_policies() const noexcept override;
+
+  private:
+
+    bool bidirectional = true;
+    double fault_derate(int src, int dst) const;
+
+    std::vector<std::tuple<int,int,double>> faulty_links;
+
 };
+
 
 }  // namespace NetworkAnalyticalCongestionAware

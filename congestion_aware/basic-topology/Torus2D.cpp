@@ -14,9 +14,10 @@ Torus2D::Torus2D(const int npus_count,
                  const Bandwidth bandwidth,
                  const Latency latency,
                  const bool bidirectional,
-                 const bool is_multi_dim) noexcept
+                 const bool is_multi_dim,
+                 const std::vector<std::tuple<int, int, double>>& faulty_links) noexcept
     : bidirectional(bidirectional),
-      BasicTopology(npus_count, npus_count, bandwidth, latency, is_multi_dim) {
+      BasicTopology(npus_count, npus_count, bandwidth, latency, is_multi_dim), faulty_links(faulty_links) {
     assert(npus_count > 0);
     assert(bandwidth > 0);
     assert(latency >= 0);
@@ -24,7 +25,7 @@ Torus2D::Torus2D(const int npus_count,
 
     Torus2D::basic_topology_type = TopologyBuildingBlock::Torus2D;
 
-    this->faulty_links = {{4,5}};
+    //this->faulty_links = {};
 
     if (!is_multi_dim) {
         // Assume npus_count forms a perfect square
@@ -37,11 +38,19 @@ Torus2D::Torus2D(const int npus_count,
 
                 // Connect to right neighbor (wrap around horizontally)
                 int right = row * dim + ((col + 1) % dim);
-                connect(current, right, bandwidth, latency, bidirectional);
+                if(fault_derate(current, right) != 0)
+                    connect(current, right, bandwidth * fault_derate(current, right), latency, bidirectional);
+                else
+                    connect(current, right, bandwidth, latency, bidirectional);  //might be removable
+
 
                 // Connect to bottom neighbor (wrap around vertically)
                 int down = ((row + 1) % dim) * dim + col;
-                connect(current, down, bandwidth, latency, bidirectional);
+                if(fault_derate(current, right) != 0)
+                    connect(current, down, bandwidth * fault_derate(current, right), latency, bidirectional);
+                else
+                    connect(current, down, bandwidth, latency, bidirectional);  //might be removable
+
             }
         }
     } else {
@@ -180,17 +189,17 @@ Route Torus2D::route(DeviceId src, DeviceId dest) const noexcept {
         int step_x = 0, step_y = 0;
         if (cx != dx) {
             int diff_x = (dx - cx + dim) % dim;
-            step_x = (diff_x > dim/2) ? -1 : +1;
+            step_x = (diff_x > dim / 2) ? -1 : +1;
         } else if (cy != dy) {
             int diff_y = (dy - cy + dim) % dim;
-            step_y = (diff_y > dim/2) ? -1 : +1;
+            step_y = (diff_y > dim / 2) ? -1 : +1;
         }
 
         int next;
         if (step_x != 0) {
             int nx = (cx + step_x + dim) % dim;
             next = cy * dim + nx;
-            if (is_faulty(cur, next)) {
+            if (fault_derate(cur, next) == 0.0) {
                 // Detour one step in Y
                 int ny = (cy + 1) % dim;
                 next = ny * dim + cx;
@@ -198,13 +207,12 @@ Route Torus2D::route(DeviceId src, DeviceId dest) const noexcept {
         } else if (step_y != 0) {
             int ny = (cy + step_y + dim) % dim;
             next = ny * dim + cx;
-            if (is_faulty(cur, next)) {
+            if (fault_derate(cur, next) == 0.0) {
                 // Detour one step in X
                 int nx = (cx + 1) % dim;
                 next = cy * dim + nx;
             }
         }
-
         route.push_back(devices.at(next));
         cur = next;
     }
@@ -258,15 +266,39 @@ std::vector<ConnectionPolicy> Torus2D::get_connection_policies() const noexcept 
     return policies;
 }
 
-bool Torus2D::is_faulty(int src, int dst) const {
-        for (auto &link : faulty_links) {
-            if ((link.first == src && link.second == dst) ||
-                (link.first == dst && link.second == src)) {
-                return true;
-            }
+/*
+bool Torus2D::is_down(int src, int dst) const {
+    for (const auto& link : faulty_links) {
+        int a = std::get<0>(link);
+        int b = std::get<1>(link);
+        double health = std::get<2>(link);
+
+        // If this link exists and health == 0.0 → it's faulty
+        if (((a == src && b == dst) || (a == dst && b == src)) && health == 0.0) {
+            return true;
         }
-        return false;
-    };
+    }
+    return false;
+}
+*/
+
+double Torus2D::fault_derate(int src, int dst) const{
+    for (const auto& link : faulty_links) {
+        int a = std::get<0>(link);
+        int b = std::get<1>(link);
+        double health = std::get<2>(link);
+
+        // If this link exists and health != 0.0 → it's soft fault
+        if ((a == src && b == dst) || (a == dst && b == src)) {
+            return health;
+        }
+        else
+            return 1;
+    }
+    return 1;
+}
+
+
 
     
 

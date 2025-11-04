@@ -60,12 +60,19 @@ class NetworkParser {
      */
     [[nodiscard]] std::vector<TopologyBuildingBlock> get_topologies_per_dim() const noexcept;
 
+    [[nodiscard]] std::vector<std::tuple<int, int, double>> get_faulty_links() const noexcept;
+
+
   private:
     /// number of network dimensions
     int dims_count;
 
     /// NPUs count per each dimension
     std::vector<int> npus_count_per_dim;
+
+
+    std::vector<std::tuple<int, int, double>> faulty_links;
+
 
     /// bandwidth per each dimension
     std::vector<Bandwidth> bandwidth_per_dim;
