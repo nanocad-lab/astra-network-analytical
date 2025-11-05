@@ -14,12 +14,14 @@ KingMesh2D::KingMesh2D(const int npus_count,
                  const Bandwidth bandwidth,
                  const Latency latency,
                  const bool bidirectional,
-                 const bool is_multi_dim) noexcept
+                 const bool is_multi_dim,
+                 const std::vector<std::tuple<int, int, double>>& faulty_links) noexcept
     : bidirectional(bidirectional),
-      BasicTopology(npus_count, npus_count, bandwidth, latency, is_multi_dim) {
+      BasicTopology(npus_count, npus_count, bandwidth, latency, is_multi_dim), faulty_links(faulty_links) {
     assert(npus_count > 0);
     assert(bandwidth > 0);
     assert(latency >= 0);
+
 
     KingMesh2D::basic_topology_type = TopologyBuildingBlock::KingMesh2D;
 
@@ -35,20 +37,32 @@ KingMesh2D::KingMesh2D(const int npus_count,
                 // --- Connect right (no wrap-around) ---
                 if (col + 1 < dim) {
                     int right = row * dim + (col + 1);
-                    connect(current, right, bandwidth, latency, bidirectional);
+                    if(fault_derate(current, right) != 0)
+                        connect(current, right, bandwidth * fault_derate(current, right), latency, bidirectional);
+                    else
+                        connect(current, right, bandwidth, latency, bidirectional);  //might be removable
                 } 
 
                 // --- Connect down (no wrap-around) ---
                 if (row + 1 < dim) {
                     int down = (row + 1) * dim + col;
-                    connect(current, down, bandwidth, latency, bidirectional);
+                    if(fault_derate(current, down) != 0)
+                        connect(current, down, bandwidth * fault_derate(current, down), latency, bidirectional);
+                    else
+                        connect(current, down, bandwidth, latency, bidirectional);  //might be removable
                     if (col + 1 < dim){
                         int diag_right = (row + 1) * dim + (col + 1);
-                        connect(current, diag_right, bandwidth, latency, bidirectional);
+                        if(fault_derate(current, down) != 0)
+                            connect(current, diag_right, bandwidth * fault_derate(current, diag_right), latency, bidirectional);
+                        else
+                            connect(current, diag_right, bandwidth, latency, bidirectional);  //might be removable
                     }
                     if (col > 0){
                         int diag_left = (row + 1) * dim + (col - 1);
-                        connect(current, diag_left, bandwidth, latency, bidirectional);
+                        if(fault_derate(current, down) != 0)
+                            connect(current, diag_left, bandwidth * fault_derate(current, diag_left), latency, bidirectional);
+                        else
+                            connect(current, diag_left, bandwidth, latency, bidirectional);  //might be removable
                     }
                 }
             }
@@ -69,53 +83,106 @@ KingMesh2D::KingMesh2D(const int npus_count,
 }
 
 Route KingMesh2D::route(DeviceId src, DeviceId dest) const noexcept {
-    // --- Sanity checks ---
-    assert(0 <= src && src < npus_count);
-    assert(0 <= dest && dest < npus_count);
-
     Route route;
-
     const int dim = static_cast<int>(std::sqrt(npus_count));
     assert(dim * dim == npus_count && "KingMesh2D requires perfect square npus_count");
 
-    // --- Compute (x, y) coordinates ---
-    int src_x = src % dim;
-    int src_y = src / dim;
-    int dest_x = dest % dim;
-    int dest_y = dest / dim;
-
-    int cur_x = src_x;
-    int cur_y = src_y;
+    int sx = src % dim, sy = src / dim;
+    int dx = dest % dim, dy = dest / dim;
 
     route.push_back(devices.at(src));
+    int cur = src;
 
-    // --- Diagonal + dimension-order routing ---
-    while (cur_x != dest_x || cur_y != dest_y) {
+    while (cur != dest) {
+        int cx = cur % dim, cy = cur / dim;
+
         int step_x = 0, step_y = 0;
+        if (cx < dx) step_x = +1;
+        else if (cx > dx) step_x = -1;
+        if (cy < dy) step_y = +1;
+        else if (cy > dy) step_y = -1;
 
-        if (cur_x < dest_x) step_x = +1;
-        else if (cur_x > dest_x) step_x = -1;
+        int next = -1;
 
-        if (cur_y < dest_y) step_y = +1;
-        else if (cur_y > dest_y) step_y = -1;
+        // --- Prefer diagonal move if both steps are nonzero ---
+        if (step_x != 0 && step_y != 0) {
+            int nx = cx + step_x;
+            int ny = cy + step_y;
+            if (nx >= 0 && nx < dim && ny >= 0 && ny < dim) {
+                next = ny * dim + nx;
+                // If diagonal link is faulty, fallback to single-axis move
+                if (fault_derate(cur, next) == 0.0) {
+                    // Prefer maintaining the same general direction
+                    int nx_alt = cx + step_x;
+                    int ny_alt = cy + step_y;
 
-        // Move diagonally if both deltas are nonzero
-        cur_x += step_x;
-        cur_y += step_y;
+                    bool moved = false;
+                    if (nx_alt >= 0 && nx_alt < dim) {
+                        int next_x = cy * dim + nx_alt;
+                        if (fault_derate(cur, next_x) != 0.0) {
+                            next = next_x;
+                            moved = true;
+                        }
+                    }
+                    if (!moved && ny_alt >= 0 && ny_alt < dim) {
+                        int next_y = ny_alt * dim + cx;
+                        if (fault_derate(cur, next_y) != 0.0) {
+                            next = next_y;
+                            moved = true;
+                        }
+                    }
+                    if (!moved) break; // No valid move
+                }
+            } else {
+                next = -1;
+            }
+        }
 
-        // Clamp to mesh boundaries (just in case)
-        if (cur_x < 0) cur_x = 0;
-        else if (cur_x >= dim) cur_x = dim - 1;
+        // --- If not diagonal or diagonal not possible, move along X or Y ---
+        if (next == -1) {
+            if (step_x != 0) {
+                int nx = cx + step_x;
+                if (nx >= 0 && nx < dim) {
+                    next = cy * dim + nx;
+                    if (fault_derate(cur, next) == 0.0) {
+                        // Detour vertically (same direction if possible)
+                        int ny_up = cy + 1;
+                        int ny_down = cy - 1;
+                        if (ny_up < dim && fault_derate(cur, ny_up * dim + cx) != 0.0)
+                            next = ny_up * dim + cx;
+                        else if (ny_down >= 0 && fault_derate(cur, ny_down * dim + cx) != 0.0)
+                            next = ny_down * dim + cx;
+                        else
+                            break;
+                    }
+                }
+            } else if (step_y != 0) {
+                int ny = cy + step_y;
+                if (ny >= 0 && ny < dim) {
+                    next = ny * dim + cx;
+                    if (fault_derate(cur, next) == 0.0) {
+                        // Detour horizontally (same direction if possible)
+                        int nx_right = cx + 1;
+                        int nx_left = cx - 1;
+                        if (nx_right < dim && fault_derate(cur, cy * dim + nx_right) != 0.0)
+                            next = cy * dim + nx_right;
+                        else if (nx_left >= 0 && fault_derate(cur, cy * dim + nx_left) != 0.0)
+                            next = cy * dim + nx_left;
+                        else
+                            break;
+                    }
+                }
+            }
+        }
 
-if (cur_y < 0) cur_y = 0;
-else if (cur_y >= dim) cur_y = dim - 1;
-
-        int idx = cur_y * dim + cur_x;
-        route.push_back(devices.at(idx));
+        if (next == -1) break;  // no valid move
+        route.push_back(devices.at(next));
+        cur = next;
     }
 
     return route;
 }
+
 
 
 std::vector<ConnectionPolicy> KingMesh2D::get_connection_policies() const noexcept {
@@ -164,4 +231,19 @@ std::vector<ConnectionPolicy> KingMesh2D::get_connection_policies() const noexce
     return policies;
 }
 
+double KingMesh2D::fault_derate(int src, int dst) const{
+    for (const auto& link : faulty_links) {
+        int a = std::get<0>(link);
+        int b = std::get<1>(link);
+        double health = std::get<2>(link);
+
+        // If this link exists and health != 0.0 → it's soft fault
+        if ((a == src && b == dst) || (a == dst && b == src)) {
+            return health;
+        }
+        else
+            return 1;
+    }
+    return 1;
+}
 

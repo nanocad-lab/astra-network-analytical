@@ -8,16 +8,20 @@ LICENSE file in the root directory of this source tree.
 
 using namespace NetworkAnalyticalCongestionAware;
 
-Switch::Switch(const int npus_count, const Bandwidth bandwidth, const Latency latency, const bool is_multi_dim) noexcept
-    : BasicTopology(npus_count, npus_count + 1, bandwidth, latency) {
-    // e.g., if npus_count=8, then
-    // there are total 9 devices, where ordinary npus are 0-7, and switch is 8
+Switch::Switch(const int npus_count,
+           const Bandwidth bandwidth,
+           const Latency latency,
+           const bool bidirectional,
+           const bool is_multi_dim,
+           const std::vector<std::tuple<int, int, double>>& faulty_links) noexcept
+    : bidirectional(bidirectional),
+      BasicTopology(npus_count, npus_count, bandwidth, latency, is_multi_dim),
+      faulty_links(faulty_links) {   // initialize faulty links
     assert(npus_count > 0);
     assert(bandwidth > 0);
     assert(latency >= 0);
 
-    // set topology type
-    basic_topology_type = TopologyBuildingBlock::Switch;
+    Switch::basic_topology_type = TopologyBuildingBlock::Switch;
 
     // set switch id
     switch_id = npus_count;
@@ -25,7 +29,10 @@ Switch::Switch(const int npus_count, const Bandwidth bandwidth, const Latency la
     // connect npus and switches, the link should be bidirectional
     if (!is_multi_dim) {
         for (auto i = 0; i < npus_count; i++) {
-            connect(i, switch_id, bandwidth, latency, true);
+            if(fault_derate(i, i+1) != 0)
+                connect(i, i+1, bandwidth * fault_derate(i, i+1), latency, bidirectional);
+            else
+                connect(i, i+1, bandwidth, latency, bidirectional);  //might be removable
         }
     }
 }
@@ -55,3 +62,20 @@ std::vector<ConnectionPolicy> Switch::get_connection_policies() const noexcept {
 
     return policies;
 }
+
+double Switch::fault_derate(int src, int dst) const{
+    for (const auto& link : faulty_links) {
+        int a = std::get<0>(link);
+        int b = std::get<1>(link);
+        double health = std::get<2>(link);
+
+        // If this link exists and health != 0.0 → it's soft fault
+        if ((a == src && b == dst) || (a == dst && b == src)) {
+            return health;
+        }
+        else
+            return 1;
+    }
+    return 1;
+}
+

@@ -9,23 +9,30 @@ LICENSE file in the root directory of this source tree.
 using namespace NetworkAnalyticalCongestionAware;
 
 FullyConnected::FullyConnected(const int npus_count,
-                               const Bandwidth bandwidth,
-                               const Latency latency,
-                               const bool is_multi_dim) noexcept
-    : BasicTopology(npus_count, npus_count, bandwidth, latency) {
+           const Bandwidth bandwidth,
+           const Latency latency,
+           const bool bidirectional,
+           const bool is_multi_dim,
+           const std::vector<std::tuple<int, int, double>>& faulty_links) noexcept
+    : bidirectional(bidirectional),
+      BasicTopology(npus_count, npus_count, bandwidth, latency, is_multi_dim),
+      faulty_links(faulty_links) {   // initialize faulty links
     assert(npus_count > 0);
     assert(bandwidth > 0);
     assert(latency >= 0);
 
-    // set topology type
-    basic_topology_type = TopologyBuildingBlock::FullyConnected;
+    FullyConnected::basic_topology_type = TopologyBuildingBlock::Ring;
+
 
     // fully-connect every src-dest pairs
     if (!is_multi_dim) {
         for (auto src = 0; src < npus_count; src++) {
             for (auto dest = 0; dest < npus_count; dest++) {
                 if (src != dest) {
-                    connect(src, dest, bandwidth, latency, false);
+                    if(fault_derate(src, dest) != 0)
+                        connect(src, dest, bandwidth * fault_derate(src, dest), latency, bidirectional);
+                    else
+                        connect(src, dest, bandwidth, latency, bidirectional);  //might be removable
                 }
             }
         }
@@ -59,3 +66,20 @@ std::vector<ConnectionPolicy> FullyConnected::get_connection_policies() const no
 
     return policies;
 }
+
+double FullyConnected::fault_derate(int src, int dst) const{
+    for (const auto& link : faulty_links) {
+        int a = std::get<0>(link);
+        int b = std::get<1>(link);
+        double health = std::get<2>(link);
+
+        // If this link exists and health != 0.0 → it's soft fault
+        if ((a == src && b == dst) || (a == dst && b == src)) {
+            return health;
+        }
+        else
+            return 1;
+    }
+    return 1;
+}
+

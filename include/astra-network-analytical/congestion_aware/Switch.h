@@ -29,16 +29,32 @@ namespace NetworkAnalyticalCongestionAware {
  * so takes 2 hops.
  */
 class Switch final : public BasicTopology {
-  public:
+ public:
     /**
      * Constructor.
      *
-     * @param npus_count number of npus connected to the switch
+     * @param npus_count number of npus connected to a switch
      * @param bandwidth bandwidth of link
      * @param latency latency of link
+     * @param bidirectional true if switch is bidirectional
+     * @param is_multi_dim  true if part of multidimensional topology
+     * @param faulty_links  list of faulty links as tuples (src, dst, weight)
      */
-    Switch(int npus_count, Bandwidth bandwidth, Latency latency, bool is_multi_dim = false) noexcept;
+    Switch(int npus_count,
+         Bandwidth bandwidth,
+         Latency latency,
+         bool bidirectional = true,
+         bool is_multi_dim = false,
+         const std::vector<std::tuple<int, int, double>>& faulty_links = {}) noexcept;
 
+    /**
+     * Alternate constructor for convenience
+     */
+    Switch(int npus_count,
+         Bandwidth bandwidth,
+         Latency latency,
+         const std::vector<std::tuple<int, int, double>>& faulty_links) noexcept
+        : Switch(npus_count, bandwidth, latency, true, false, faulty_links) {}
     /**
      * Implementation of route function in Topology.
      */
@@ -57,6 +73,10 @@ class Switch final : public BasicTopology {
   private:
     /// node_id of the switch node
     DeviceId switch_id;
+    double fault_derate(int src, int dst) const;
+
+    bool bidirectional;
+    std::vector<std::tuple<int, int, double>> faulty_links;
 };
 
 }  // namespace NetworkAnalyticalCongestionAware

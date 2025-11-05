@@ -14,12 +14,14 @@ Mesh2D::Mesh2D(const int npus_count,
                  const Bandwidth bandwidth,
                  const Latency latency,
                  const bool bidirectional,
-                 const bool is_multi_dim) noexcept
+                 const bool is_multi_dim,
+                 const std::vector<std::tuple<int, int, double>>& faulty_links) noexcept
     : bidirectional(bidirectional),
-      BasicTopology(npus_count, npus_count, bandwidth, latency, is_multi_dim) {
+      BasicTopology(npus_count, npus_count, bandwidth, latency, is_multi_dim), faulty_links(faulty_links) {
     assert(npus_count > 0);
     assert(bandwidth > 0);
     assert(latency >= 0);
+
 
     Mesh2D::basic_topology_type = TopologyBuildingBlock::Mesh2D;
 
@@ -35,13 +37,19 @@ Mesh2D::Mesh2D(const int npus_count,
                 // --- Connect right (no wrap-around) ---
                 if (col + 1 < dim) {
                     int right = row * dim + (col + 1);
-                    connect(current, right, bandwidth, latency, bidirectional);
+                    if(fault_derate(current, right) != 0)
+                    connect(current, right, bandwidth * fault_derate(current, right), latency, bidirectional);
+                else
+                    connect(current, right, bandwidth, latency, bidirectional);  //might be removable
                 }
 
                 // --- Connect down (no wrap-around) ---
                 if (row + 1 < dim) {
                     int down = (row + 1) * dim + col;
-                    connect(current, down, bandwidth, latency, bidirectional);
+                    if(fault_derate(current, down) != 0)
+                    connect(current, down, bandwidth * fault_derate(current, down), latency, bidirectional);
+                else
+                    connect(current, down, bandwidth, latency, bidirectional);  //might be removable
                 }
             }
         }
@@ -61,52 +69,72 @@ Mesh2D::Mesh2D(const int npus_count,
 }
 
 Route Mesh2D::route(DeviceId src, DeviceId dest) const noexcept {
-    // --- Sanity checks ---
-    assert(0 <= src && src < npus_count);
-    assert(0 <= dest && dest < npus_count);
-
     Route route;
-
     const int dim = static_cast<int>(std::sqrt(npus_count));
-    assert(dim * dim == npus_count && "2D mesh requires perfect square npus_count");
-
-    // --- Compute (x, y) coordinates ---
-    int src_x = src % dim;
-    int src_y = src / dim;
-    int dest_x = dest % dim;
-    int dest_y = dest / dim;
-
-    // --- Compute deltas ---
-    int dx = dest_x - src_x;
-    int dy = dest_y - src_y;
-
-    // --- Determine step directions ---
-    int step_x = (dx == 0) ? 0 : (dx > 0 ? +1 : -1);
-    int step_y = (dy == 0) ? 0 : (dy > 0 ? +1 : -1);
-
-    // --- Start from source ---
-    int cur_x = src_x;
-    int cur_y = src_y;
+    int sx = src % dim, sy = src / dim;
+    int dx = dest % dim, dy = dest / dim;
 
     route.push_back(devices.at(src));
+    int cur = src;
 
-    // --- Route along X first ---
-    while (cur_x != dest_x) {
-        cur_x += step_x;
-        int idx = cur_y * dim + cur_x;
-        route.push_back(devices.at(idx));
+    while (cur != dest) {
+        int cx = cur % dim, cy = cur / dim;
+
+        int step_x = 0, step_y = 0;
+        if (cx != dx) {
+            step_x = (dx > cx) ? +1 : -1;
+        } else if (cy != dy) {
+            step_y = (dy > cy) ? +1 : -1;
+        }
+
+        int next;
+        if (step_x != 0) {
+            int nx = cx + step_x;
+            if (nx >= 0 && nx < dim) {
+                next = cy * dim + nx;
+                if (fault_derate(cur, next) == 0.0) {
+                    // Detour one step in Y
+                    int ny_up = cy + 1;
+                    int ny_down = cy - 1;
+                    if (ny_up < dim && fault_derate(cur, ny_up * dim + cx) != 0.0)
+                        next = ny_up * dim + cx;
+                    else if (ny_down >= 0 && fault_derate(cur, ny_down * dim + cx) != 0.0)
+                        next = ny_down * dim + cx;
+                    else
+                        break;  // no valid detour
+                }
+            } else {
+                break;  // out of bounds
+            }
+        } else if (step_y != 0) {
+            int ny = cy + step_y;
+            if (ny >= 0 && ny < dim) {
+                next = ny * dim + cx;
+                if (fault_derate(cur, next) == 0.0) {
+                    // Detour one step in X
+                    int nx_right = cx + 1;
+                    int nx_left = cx - 1;
+                    if (nx_right < dim && fault_derate(cur, cy * dim + nx_right) != 0.0)
+                        next = cy * dim + nx_right;
+                    else if (nx_left >= 0 && fault_derate(cur, cy * dim + nx_left) != 0.0)
+                        next = cy * dim + nx_left;
+                    else
+                        break;  // no valid detour
+                }
+            } else {
+                break;  // out of bounds
+            }
+        } else {
+            break;  // no progress
+        }
+
+        route.push_back(devices.at(next));
+        cur = next;
     }
 
-    // --- Then along Y ---
-    while (cur_y != dest_y) {
-        cur_y += step_y;
-        int idx = cur_y * dim + cur_x;
-        route.push_back(devices.at(idx));
-    }
-
-    // --- Done ---
     return route;
 }
+
 
 std::vector<ConnectionPolicy> Mesh2D::get_connection_policies() const noexcept {
     std::vector<ConnectionPolicy> policies;
@@ -157,3 +185,20 @@ std::vector<ConnectionPolicy> Mesh2D::get_connection_policies() const noexcept {
     return policies;
 }
 
+double Mesh2D::fault_derate(int src, int dst) const{
+    for (const auto& link : faulty_links) {
+        int a = std::get<0>(link);
+        int b = std::get<1>(link);
+        double health = std::get<2>(link);
+
+        // If this link exists and health != 0.0 → it's soft fault
+        if ((a == src && b == dst) || (a == dst && b == src)) {
+            return health;
+        }
+        else
+            //std::cerr << "[Warning] (network/analytical) No link between destination pair" <<src <<"and" <<dst<< "Faulty link omitted.\n";
+            return 1;
+    }
+
+    return 1;
+}

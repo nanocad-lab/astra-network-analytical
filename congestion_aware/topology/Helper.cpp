@@ -42,9 +42,9 @@ std::shared_ptr<Topology> NetworkAnalyticalCongestionAware::construct_topology(
         case TopologyBuildingBlock::Ring:
             return std::make_shared<Ring>(npus_count, bandwidth, latency, faulty_links);
         case TopologyBuildingBlock::Switch:
-            return std::make_shared<Switch>(npus_count, bandwidth, latency);
+            return std::make_shared<Switch>(npus_count, bandwidth, latency, faulty_links);
         case TopologyBuildingBlock::FullyConnected:
-            return std::make_shared<FullyConnected>(npus_count, bandwidth, latency);
+            return std::make_shared<FullyConnected>(npus_count, bandwidth, latency, faulty_links);
         case TopologyBuildingBlock::BinaryTree:
             return std::make_shared<BinaryTree>(npus_count, bandwidth, latency);
         case TopologyBuildingBlock::DoubleBinaryTree:
@@ -54,7 +54,7 @@ std::shared_ptr<Topology> NetworkAnalyticalCongestionAware::construct_topology(
         case TopologyBuildingBlock::Torus2D:
             return std::make_shared<Torus2D>(npus_count, bandwidth, latency, faulty_links);
         case TopologyBuildingBlock::Mesh2D:
-            return std::make_shared<Mesh2D>(npus_count, bandwidth, latency);
+            return std::make_shared<Mesh2D>(npus_count, bandwidth, latency, faulty_links);
         case TopologyBuildingBlock::KingMesh2D:
             return std::make_shared<KingMesh2D>(npus_count, bandwidth, latency);
         default:

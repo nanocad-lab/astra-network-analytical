@@ -32,9 +32,9 @@ Ring::Ring(const int npus_count,
                     connect(i, i+1, bandwidth, latency, bidirectional);  //might be removable
         }
         if(fault_derate(npus_count-1, 0) != 0)
-                    connect(npus_count-1, 0, bandwidth * fault_derate(npus_count-1, 0), latency, bidirectional);
-                else
-                    connect(npus_count-1, 0, bandwidth, latency, bidirectional);  //might be removable
+                connect(npus_count-1, 0, bandwidth * fault_derate(npus_count-1, 0), latency, bidirectional);
+            else
+                connect(npus_count-1, 0, bandwidth, latency, bidirectional);  //might be removable
     }
 
     // this also works

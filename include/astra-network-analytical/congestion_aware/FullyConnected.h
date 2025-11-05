@@ -25,16 +25,32 @@ namespace NetworkAnalyticalCongestionAware {
  * Arbitrary send between two pair of NPUs will take 1 hop.
  */
 class FullyConnected final : public BasicTopology {
-  public:
+ public:
     /**
      * Constructor.
      *
-     * @param npus_count number of npus in the FullyConnected topology
-     * @param bandwidth bandwidth of each link
-     * @param latency latency of each link
+     * @param npus_count number of npus 
+     * @param bandwidth bandwidth of link
+     * @param latency latency of link
+     * @param bidirectional true if is bidirectional
+     * @param is_multi_dim  true if part of multidimensional topology
+     * @param faulty_links  list of faulty links as tuples (src, dst, weight)
      */
-    FullyConnected(int npus_count, Bandwidth bandwidth, Latency latency, bool is_multi_dim = false) noexcept;
+    FullyConnected(int npus_count,
+         Bandwidth bandwidth,
+         Latency latency,
+         bool bidirectional = true,
+         bool is_multi_dim = false,
+         const std::vector<std::tuple<int, int, double>>& faulty_links = {}) noexcept;
 
+    /**
+     * Alternate constructor for convenience
+     */
+    FullyConnected(int npus_count,
+         Bandwidth bandwidth,
+         Latency latency,
+         const std::vector<std::tuple<int, int, double>>& faulty_links) noexcept
+        : FullyConnected(npus_count, bandwidth, latency, true, false, faulty_links) {}
     /**
      * Implementation of route function in Topology.
      */
@@ -49,6 +65,11 @@ class FullyConnected final : public BasicTopology {
      * @return list of connection policies
      */
     [[nodiscard]] std::vector<ConnectionPolicy> get_connection_policies() const noexcept override;
+
+    double fault_derate(int src, int dst) const;
+
+    bool bidirectional;
+    std::vector<std::tuple<int, int, double>> faulty_links;
 };
 
 }  // namespace NetworkAnalyticalCongestionAware
