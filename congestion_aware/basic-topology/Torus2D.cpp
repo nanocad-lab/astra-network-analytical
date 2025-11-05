@@ -47,7 +47,7 @@ Torus2D::Torus2D(const int npus_count,
                 // Connect to bottom neighbor (wrap around vertically)
                 int down = ((row + 1) % dim) * dim + col;
                 if(fault_derate(current, down) != 0)
-                    connect(current, down, bandwidth * fault_derate(current, right), latency, bidirectional);
+                    connect(current, down, bandwidth * fault_derate(current, down), latency, bidirectional);
                 else
                     connect(current, down, bandwidth, latency, bidirectional);  //might be removable
 

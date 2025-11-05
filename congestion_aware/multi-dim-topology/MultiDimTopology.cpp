@@ -84,89 +84,12 @@ Route MultiDimTopology::route(DeviceId src, DeviceId dest) const noexcept {
                 route_in_dim.push_back(devices.at(global_device_id));
             }
 
-            // we have finished the route_in_dim
-std::vector<DeviceId> route_id;
-for (const auto device : route_in_dim) {
-    route_id.push_back(device->get_id());
-}
-std::cout << "[DEBUG] Route in dimension before fault check: ";
-for (auto id : route_id) std::cout << id << " ";
-std::cout << std::endl;
-
-bool meet_fault = false;
-for (int i = 0; i < (int)route_id.size() - 1; i++) {
-    double derate = fault_derate(route_id.at(i), route_id.at(i + 1));
-    std::cout << "[DEBUG] Checking link (" << route_id.at(i) 
-              << " -> " << route_id.at(i + 1) 
-              << "), derate = " << derate << std::endl;
-
-    if (derate == 0.0) {
-        std::cout << "[DEBUG] Fault detected between " 
-                  << route_id.at(i) << " and " << route_id.at(i + 1) << std::endl;
-
-        auto begin_itr = route_in_dim.begin();
-        //auto end_itr = route_in_dim.begin();
-        std::advance(begin_itr, i+1);
-        //std::advance(end_itr, route_in_dim.size()-1);
-        route_in_dim.erase(begin_itr, route_in_dim.end());
-        route_id.erase(route_id.begin()+i+1, route_id.end());
-        meet_fault = true;
-
-        std::cout << "[DEBUG] Truncated route_in_dim after fault at position " << i 
-                  << ". Remaining: ";
-        for (auto d : route_in_dim)
-            std::cout << d->get_id() << " ";
-        std::cout << std::endl;
-
-        break;
-    }
-}
-
-// Remove duplicate at the junction of segments
-if (!route.empty() && !route_in_dim.empty()) {
-    std::cout << "[DEBUG] Removing duplicate junction node "
-              << route_in_dim.front()->get_id() << std::endl;
-    route_in_dim.pop_front();
-}
-
-// Append to total routing
-if (!route_in_dim.empty()) {
-    std::cout << "[DEBUG] Appending route_in_dim to main route. route_in_dim size = "
-              << route_in_dim.size() << std::endl;
-}
-route.splice(route.end(), route_in_dim);
-
-if (meet_fault) {
-    int last_id = route_id.back(); // global id before fault
-    std::cout << "[DEBUG] Fault met. last_id = " << last_id << std::endl;
-
-    const auto last_device_addr = translate_address(last_id);
-    std::cout << "[DEBUG] last_device_addr: ";
-    for (auto v : last_device_addr) std::cout << v << " ";
-    std::cout << std::endl;
-
-    auto new_dest_addr{last_device_addr};
-    if (dim_to_transfer + 1 < (int)new_dest_addr.size()) {
-        new_dest_addr.at(dim_to_transfer + 1)++;
-        std::cout << "[DEBUG] Adjusted new_dest_addr after fault: ";
-        for (auto v : new_dest_addr) std::cout << v << " ";
-        std::cout << std::endl;
-    } else {
-        std::cout << "[WARN] dim_to_transfer+1 is out of range for new_dest_addr" << std::endl;
-    }
-    std::cout << "[DEBUG] destination value: " << dest << std::endl;
-    auto new_dest = translate_address_back(new_dest_addr);
-    std::cout << "[DEBUG] New destination after fault reroute: " << new_dest << std::endl;
-
-    auto new_route = this->route(new_dest, dest);
-    std::cout << "[DEBUG] Reroute path after fault: ";
-    for (auto d : new_route)
-        std::cout << d->get_id() << " ";
-    std::cout << std::endl;
-
-    route.splice(route.end(), new_route); // apppend new path
-    return route;
-}
+            // Remove duplicate at the junction of segments
+            if (!route.empty() && !route_in_dim.empty()) {
+                route_in_dim.pop_front();
+            }
+            // Append to total routing
+            route.splice(route.end(), route_in_dim);
 
             // update last dest
             last_dest_address = next_dim_dest_address;
