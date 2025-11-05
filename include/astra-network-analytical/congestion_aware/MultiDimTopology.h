@@ -26,7 +26,7 @@ class MultiDimTopology : public Topology {
     /**
      * Constructor.
      */
-    MultiDimTopology() noexcept;
+    MultiDimTopology(const std::vector<std::tuple<int, int, double>> faulty_links) noexcept;
 
     /**
      * Implementation of route function in Topology.
@@ -92,6 +92,10 @@ class MultiDimTopology : public Topology {
      * @return @c true if the address corresponds to a switch, false otherwise
      */
     [[nodiscard]] bool is_switch(const MultiDimAddress& address) const noexcept;
+
+    double fault_derate(int src, int dst) const;
+    std::vector<std::tuple<int, int, double>> faulty_links;
+
 
     /// BasicTopology instances per dimension.
     std::vector<std::unique_ptr<BasicTopology>> m_topology_per_dim;

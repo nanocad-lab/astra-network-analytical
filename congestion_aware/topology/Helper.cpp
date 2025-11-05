@@ -64,7 +64,7 @@ std::shared_ptr<Topology> NetworkAnalyticalCongestionAware::construct_topology(
             std::exit(-1);
         }
     } else {  // otherwise, create multi-dim basic-topology
-        const auto multi_dim_topology = std::make_shared<MultiDimTopology>();
+        const auto multi_dim_topology = std::make_shared<MultiDimTopology>(faulty_links);
 
         // create and append dims
         for (auto dim = 0; dim < dims_count; dim++) {
