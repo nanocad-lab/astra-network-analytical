@@ -195,10 +195,7 @@ double Mesh2D::fault_derate(int src, int dst) const{
         if ((a == src && b == dst) || (a == dst && b == src)) {
             return health;
         }
-        else
-            //std::cerr << "[Warning] (network/analytical) No link between destination pair" <<src <<"and" <<dst<< "Faulty link omitted.\n";
-            return 1;
     }
 
-    return 1;
+    return 1.0;
 }

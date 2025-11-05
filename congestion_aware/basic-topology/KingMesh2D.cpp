@@ -241,9 +241,7 @@ double KingMesh2D::fault_derate(int src, int dst) const{
         if ((a == src && b == dst) || (a == dst && b == src)) {
             return health;
         }
-        else
-            return 1;
     }
-    return 1;
+    return 1.0;
 }
 

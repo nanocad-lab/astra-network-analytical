@@ -26,8 +26,11 @@ Ring::Ring(const int npus_count,
     if (!is_multi_dim) {
         // connect npus in a ring
         for (auto i = 0; i < npus_count - 1; i++) {
-            if(fault_derate(i, i+1) != 0)
+            if(fault_derate(i, i+1) != 0){
+                    if (fault_derate(i, i+1) != 1)
+                        std::cout<<"HERE IS FAULTY_LINK"<<std::endl;
                     connect(i, i+1, bandwidth * fault_derate(i, i+1), latency, bidirectional);
+            }
                 else
                     connect(i, i+1, bandwidth, latency, bidirectional);  //might be removable
         }
@@ -105,18 +108,16 @@ std::vector<ConnectionPolicy> Ring::get_connection_policies() const noexcept {
     return policies;
 }
 
-double Ring::fault_derate(int src, int dst) const{
+double Ring::fault_derate(int src, int dst) const {
     for (const auto& link : faulty_links) {
         int a = std::get<0>(link);
         int b = std::get<1>(link);
         double health = std::get<2>(link);
 
-        // If this link exists and health != 0.0 → it's soft fault
         if ((a == src && b == dst) || (a == dst && b == src)) {
             return health;
         }
-        else
-            return 1;
     }
-    return 1;
+    return 1.0;  // ✅ default: healthy link
 }
+
