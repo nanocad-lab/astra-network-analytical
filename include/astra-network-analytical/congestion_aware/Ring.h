@@ -32,6 +32,7 @@ class Ring final : public BasicTopology {
      * @param latency latency of link
      * @param bidirectional true if ring is bidirectional
      * @param is_multi_dim  true if part of multidimensional topology
+     * @param non_recursive_topo
      * @param faulty_links  list of faulty links as tuples (src, dst, weight)
      */
     Ring(int npus_count,
@@ -39,6 +40,7 @@ class Ring final : public BasicTopology {
          Latency latency,
          bool bidirectional = true,
          bool is_multi_dim = false,
+         int non_recursive_topo = 1,
          const std::vector<std::tuple<int, int, double>>& faulty_links = {}) noexcept;
 
     /**
@@ -48,7 +50,7 @@ class Ring final : public BasicTopology {
          Bandwidth bandwidth,
          Latency latency,
          const std::vector<std::tuple<int, int, double>>& faulty_links) noexcept
-        : Ring(npus_count, bandwidth, latency, true, false, faulty_links) {}
+        : Ring(npus_count, bandwidth, latency, true, false, 1, faulty_links) {}
 
     /**
      * Implementation of route function in Topology.
@@ -65,6 +67,7 @@ class Ring final : public BasicTopology {
 
     bool bidirectional;
     std::vector<std::tuple<int, int, double>> faulty_links;
+    int non_recursive_topo;
 };
 
 }  // namespace NetworkAnalyticalCongestionAware

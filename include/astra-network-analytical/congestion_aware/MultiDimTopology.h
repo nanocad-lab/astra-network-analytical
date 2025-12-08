@@ -26,7 +26,7 @@ class MultiDimTopology : public Topology {
     /**
      * Constructor.
      */
-    MultiDimTopology(const std::vector<std::tuple<int, int, double>> faulty_links) noexcept;
+    MultiDimTopology(const std::vector<std::tuple<int, int, double>> faulty_links, std::vector<int>non_recursive_topo) noexcept;
 
     /**
      * Implementation of route function in Topology.
@@ -44,6 +44,11 @@ class MultiDimTopology : public Topology {
      * Make connections for all nodes inter and intra dimensions.
      */
     void make_connections() noexcept;
+
+    /**
+     * Make connections for all nodes inter and intra dimensions.
+     */
+    void make_non_recursive_connections() noexcept;
 
     /**
      * Initialize all devices in the topology.
@@ -97,6 +102,7 @@ class MultiDimTopology : public Topology {
 
     double fault_derate(int src, int dst) const;
     std::vector<std::tuple<int, int, double>> faulty_links;
+    std::vector<int> non_recursive_topo;
 
 
     /// BasicTopology instances per dimension.

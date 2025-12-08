@@ -16,6 +16,7 @@ NetworkParser::NetworkParser(const std::string& path) noexcept : dims_count(-1) 
     latency_per_dim = {};
     topology_per_dim = {};
     faulty_links = {};
+    non_recursive_topo = {};
 
     try {
         // load network config file
@@ -66,6 +67,9 @@ std::vector<TopologyBuildingBlock> NetworkParser::get_topologies_per_dim() const
 std::vector<std::tuple<int, int, double>> NetworkParser::get_faulty_links() const noexcept {
     return faulty_links;
 }
+std::vector<int> NetworkParser::get_non_recursive_topo() const noexcept {
+    return non_recursive_topo;
+}
 
 void NetworkParser::parse_network_config_yml(const YAML::Node& network_config) noexcept {
     // parse topology_per_dim
@@ -82,6 +86,16 @@ void NetworkParser::parse_network_config_yml(const YAML::Node& network_config) n
     npus_count_per_dim = parse_vector<int>(network_config["npus_count"]);
     bandwidth_per_dim = parse_vector<Bandwidth>(network_config["bandwidth"]);
     latency_per_dim = parse_vector<Latency>(network_config["latency"]);
+    if (network_config["non_recursive_topology"]) {
+        non_recursive_topo = parse_vector<int>(network_config["non_recursive_topology"]);
+        if (std::all_of(non_recursive_topo.begin(), non_recursive_topo.end(),
+                    [](int x){ return x == 0; })) {
+        std::fill(non_recursive_topo.begin(), non_recursive_topo.end(), 1);
+        }
+    }
+    else{
+        std::fill(non_recursive_topo.begin(), non_recursive_topo.end(), 1);
+    }
 
     // check the validity of the parsed network config
     check_validity();

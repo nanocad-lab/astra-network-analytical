@@ -16,7 +16,8 @@ LICENSE file in the root directory of this source tree.
 
 namespace NetworkAnalyticalCongestionAware {
 
-MultiDimTopology::MultiDimTopology(const std::vector<std::tuple<int, int, double>> faulty_links) noexcept : Topology() , faulty_links{faulty_links}{
+MultiDimTopology::MultiDimTopology(const std::vector<std::tuple<int, int, double>> faulty_links, const std::vector<int> non_recursive_topo) noexcept 
+: Topology() , faulty_links{faulty_links}, non_recursive_topo{non_recursive_topo}{
     // initialize values
     m_topology_per_dim.clear();
     npus_count_per_dim = {};
@@ -247,14 +248,19 @@ void MultiDimTopology::make_connections() noexcept {
                                       : translate_address_back(address_pair.second);
                 assert(0 <= src && src < devices_count);
                 assert(0 <= dest && dest < devices_count);
+                //simulate non_recursive topology
+                double scale_factor = 1.0;
+                if(non_recursive_topo.at(dim) == 0){
+                    scale_factor = 0.5;
+                }
 
                 // make connection
                 const auto bandwidth = bandwidth_per_dim.at(dim);
                 const auto latency = topology->get_link_latency();
                 if(fault_derate(src, dest) != 0)
-                    connect(src, dest, bandwidth * fault_derate(src, dest), latency, false);
+                    connect(src, dest, bandwidth * fault_derate(src, dest) * scale_factor, latency, false);
                 else
-                    connect(src, dest, bandwidth, latency, false);  //might be removable
+                    connect(src, dest, bandwidth * scale_factor, latency, false);  //might be removable
             }
         }
     }
@@ -408,4 +414,46 @@ double MultiDimTopology::fault_derate(int src, int dst) const{
 }
 
 
+void MultiDimTopology::make_non_recursive_connections() noexcept {
+    if (!m_switch_translation_unit.has_value()) {
+        std::cerr << "[Error] (network/analytical/congestion_aware/MultiDimTopology): "
+                  << "SwitchTranslationUnit is not initialized." << std::endl;
+        std::exit(-1);
+    }
+
+    for (int dim = 0; dim < dims_count; dim++) {
+        // intra-dim connections
+        const auto topology = m_topology_per_dim.at(dim).get();
+        const auto policies = topology->get_connection_policies();
+        assert(policies.size() != 0);
+
+        for (const auto& policy : policies) {
+            std::vector<std::pair<MultiDimAddress, MultiDimAddress>> address_pairs =
+                generateAddressPairs(npus_count_per_dim, policy, dim);
+            for (const auto& address_pair : address_pairs) {
+                // translate to device ID, depending on switch or not
+
+                const auto src = is_switch(address_pair.first)
+                                     ? m_switch_translation_unit.value().translate_address_to_id(address_pair.first)
+                                     : translate_address_back(address_pair.first);
+                const auto dest = is_switch(address_pair.second)
+                                      ? m_switch_translation_unit.value().translate_address_to_id(address_pair.second)
+                                      : translate_address_back(address_pair.second);
+                assert(0 <= src && src < devices_count);
+                assert(0 <= dest && dest < devices_count);
+
+                // make connection
+                const auto bandwidth = bandwidth_per_dim.at(dim);
+                const auto latency = topology->get_link_latency();
+                if(fault_derate(src, dest) != 0)
+                    connect(src, dest, bandwidth * fault_derate(src, dest), latency, false);
+                else
+                    connect(src, dest, bandwidth, latency, false);  //might be removable
+            }
+        }
+    }
+}
+
+
 };  // namespace NetworkAnalyticalCongestionAware
+

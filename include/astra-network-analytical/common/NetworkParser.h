@@ -61,6 +61,7 @@ class NetworkParser {
     [[nodiscard]] std::vector<TopologyBuildingBlock> get_topologies_per_dim() const noexcept;
 
     [[nodiscard]] std::vector<std::tuple<int, int, double>> get_faulty_links() const noexcept;
+    [[nodiscard]] std::vector<int> get_non_recursive_topo() const noexcept;
 
 
   private:
@@ -72,6 +73,7 @@ class NetworkParser {
 
 
     std::vector<std::tuple<int, int, double>> faulty_links;
+    std::vector<int> non_recursive_topo;
 
 
     /// bandwidth per each dimension

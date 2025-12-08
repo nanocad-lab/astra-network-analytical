@@ -13,10 +13,13 @@ Ring::Ring(const int npus_count,
            const Latency latency,
            const bool bidirectional,
            const bool is_multi_dim,
+           const int non_recursive_topo,
            const std::vector<std::tuple<int, int, double>>& faulty_links) noexcept
     : bidirectional(bidirectional),
       BasicTopology(npus_count, npus_count, bandwidth, latency, is_multi_dim),
-      faulty_links(faulty_links) {   // initialize faulty links
+      non_recursive_topo(non_recursive_topo),
+      faulty_links(faulty_links) 
+{   // initialize faulty links
     assert(npus_count > 0);
     assert(bandwidth > 0);
     assert(latency >= 0);
@@ -24,20 +27,21 @@ Ring::Ring(const int npus_count,
     Ring::basic_topology_type = TopologyBuildingBlock::Ring;
 
     if (!is_multi_dim) {
-        // connect npus in a ring
+        double scale_factor = 2.0;
+        //connect npus in a ring
         for (auto i = 0; i < npus_count - 1; i++) {
             if(fault_derate(i, i+1) != 0){
                     if (fault_derate(i, i+1) != 1)
                         std::cout<<"HERE IS FAULTY_LINK"<<std::endl;
-                    connect(i, i+1, bandwidth * fault_derate(i, i+1), latency, bidirectional);
+                    connect(i, i+1, bandwidth * fault_derate(i, i+1) * scale_factor, latency, bidirectional);
             }
                 else
-                    connect(i, i+1, bandwidth, latency, bidirectional);  //might be removable
+                    connect(i, i+1, bandwidth * scale_factor, latency, bidirectional);  //might be removable
         }
         if(fault_derate(npus_count-1, 0) != 0)
-                connect(npus_count-1, 0, bandwidth * fault_derate(npus_count-1, 0), latency, bidirectional);
+                connect(npus_count-1, 0, bandwidth * fault_derate(npus_count-1, 0) * scale_factor, latency, bidirectional);
             else
-                connect(npus_count-1, 0, bandwidth, latency, bidirectional);  //might be removable
+                connect(npus_count-1, 0, bandwidth * scale_factor, latency, bidirectional);  //might be removable
     }
 
     // this also works
