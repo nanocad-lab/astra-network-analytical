@@ -328,7 +328,7 @@ void MultiDimTopology::make_connections() noexcept {
         const auto topology = m_topology_per_dim.at(dim).get();
         const auto policies = topology->get_connection_policies();
         assert(policies.size() != 0);
-        bool non_recursive = (m_non_recursive_topo.at(dim) == 1);
+        bool non_recursive = false;
         std::vector<std::pair<MultiDimAddress, MultiDimAddress>> address_pairs;
 
         for (const auto& policy : policies) {
