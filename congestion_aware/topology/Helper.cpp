@@ -30,7 +30,8 @@ std::shared_ptr<Topology> NetworkAnalyticalCongestionAware::construct_topology(
     const auto bandwidths_per_dim = network_parser.get_bandwidths_per_dim();
     const auto latencies_per_dim = network_parser.get_latencies_per_dim();
     const auto faulty_links = network_parser.get_faulty_links();
-    const auto non_recursive_topo_per_dim = network_parser.get_non_recursive_topo();
+    const auto non_recursive_topo = network_parser.get_non_recursive_topo();
+    std::cout<< dims_count<< std::endl;
 
     // if single dim, create basic-topology
     if (dims_count == 1) {
@@ -39,7 +40,7 @@ std::shared_ptr<Topology> NetworkAnalyticalCongestionAware::construct_topology(
         const auto npus_count = npus_counts_per_dim[0];
         const auto bandwidth = bandwidths_per_dim[0];
         const auto latency = latencies_per_dim[0];
-        const auto non_recursive_topo = non_recursive_topo_per_dim[0];
+        const auto non_recursive_topo_per_dim = non_recursive_topo[0];
 
         switch (topology_type) {
         case TopologyBuildingBlock::Ring:
@@ -69,7 +70,8 @@ std::shared_ptr<Topology> NetworkAnalyticalCongestionAware::construct_topology(
             std::exit(-1);
         }
     } else {  // otherwise, create multi-dim basic-topology
-        const auto multi_dim_topology = std::make_shared<MultiDimTopology>(faulty_links, non_recursive_topo_per_dim);
+        
+        const auto multi_dim_topology = std::make_shared<MultiDimTopology>(faulty_links, non_recursive_topo);
 
         // create and append dims
         for (auto dim = 0; dim < dims_count; dim++) {

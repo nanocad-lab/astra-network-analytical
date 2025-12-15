@@ -33,6 +33,14 @@ class MultiDimTopology : public Topology {
      */
     [[nodiscard]] Route route(DeviceId src, DeviceId dest) const noexcept override;
 
+    // traditional multidim
+    [[nodiscard]] Route routeNormal(DeviceId src, DeviceId dest) const noexcept;
+
+    // routing with cluster into account
+    [[nodiscard]] Route routeCluster(DeviceId src, DeviceId dest) const noexcept;
+
+    bool m_cluster = false; // indicate if this is a non-recursive cluster topology
+
     /**
      * Add a dimension to the multi-dimensional topology.
      *
@@ -102,7 +110,7 @@ class MultiDimTopology : public Topology {
 
     double fault_derate(int src, int dst) const;
     std::vector<std::tuple<int, int, double>> faulty_links;
-    std::vector<int> non_recursive_topo;
+    std::vector<int> m_non_recursive_topo;
 
 
     /// BasicTopology instances per dimension.

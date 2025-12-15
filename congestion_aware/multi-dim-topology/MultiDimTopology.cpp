@@ -17,7 +17,7 @@ LICENSE file in the root directory of this source tree.
 namespace NetworkAnalyticalCongestionAware {
 
 MultiDimTopology::MultiDimTopology(const std::vector<std::tuple<int, int, double>> faulty_links, const std::vector<int> non_recursive_topo) noexcept 
-: Topology() , faulty_links{faulty_links}, non_recursive_topo{non_recursive_topo}{
+: Topology() , faulty_links{faulty_links}, m_non_recursive_topo{non_recursive_topo}{
     // initialize values
     m_topology_per_dim.clear();
     npus_count_per_dim = {};
@@ -26,19 +26,114 @@ MultiDimTopology::MultiDimTopology(const std::vector<std::tuple<int, int, double
     this->npus_count = 1;
     this->devices_count = 1;
     this->dims_count = 0;
+    this->m_cluster = (m_non_recursive_topo.at(non_recursive_topo.size()-1) == 1);
 }
 
+// Route MultiDimTopology::route(DeviceId src, DeviceId dest) const noexcept {
+//     // build up diemnsion
+//     std::vector<int> routing_dimensions;
+//     for (int dim_to_transfer = dims_count - 1; dim_to_transfer >= 0; dim_to_transfer--) {
+//         routing_dimensions.push_back(dim_to_transfer);
+//     }
+
+//     // call
+//     return routeHelper(src, dest, routing_dimensions);
+
+// }
+
+
+
 Route MultiDimTopology::route(DeviceId src, DeviceId dest) const noexcept {
-    // build up diemnsion
-    std::vector<int> routing_dimensions;
+    if (m_cluster) {
+        return routeCluster(src, dest);
+    }
+    else
+    {
+        return routeNormal(src, dest);
+    }
+}
+
+Route MultiDimTopology::routeCluster(DeviceId src, DeviceId dest) const noexcept {
+    // build up dimension
+    std::vector<int> normal_routing_dimensions; // right to left, top to bottom
+    for (int dim_to_transfer = dims_count - 1; dim_to_transfer >= 0; dim_to_transfer--) {
+        normal_routing_dimensions.push_back(dim_to_transfer);
+    }
+
+    std::vector<int> reverse_routing_dimensions; // left to right, bottom to top
+    for (int dim_to_transfer = 0; dim_to_transfer < dims_count; dim_to_transfer++) {
+        reverse_routing_dimensions.push_back(dim_to_transfer);
+    }
+
+    MultiDimAddress src_addr = translate_address(src);
+    // address [0 ... 0 Q ... Z] when src is [A ... P Q ... Z]
+    //std::vector<int> non_recursive_topo = {0, 0, 1};
+    MultiDimAddress src_cluster_agent_addr{src_addr};
+    for (int dim = 0; dim < dims_count; dim++)
+    {
+        if (m_non_recursive_topo.at(dim) == 0) {
+            src_cluster_agent_addr.at(dim) = 0;
+        }
+        else {
+            break;
+        }
+    }
+    DeviceId src_cluster_agent_id = translate_address_back(src_cluster_agent_addr);
+
+    // address [0 ... 0 Z] when src is [A ... P Q ... Z]
+    auto top_cluster_agent_addr = MultiDimAddress();
+    for (int dim = 0; dim < dims_count; dim++)
+    {
+        top_cluster_agent_addr.push_back(0);
+    }
+    assert(top_cluster_agent_addr.size() == dims_count);
+    top_cluster_agent_addr.at(dims_count - 1) = src_addr.at(dims_count - 1);
+    DeviceId top_cluster_agent_id = translate_address_back(top_cluster_agent_addr);
+   
+
+    // do two routing and connect them together
+    Route route_to_agent, cluster_route, agent_to_dest;
+    if (src != src_cluster_agent_id) {
+        route_to_agent = routeHelper(src, src_cluster_agent_id, normal_routing_dimensions);
+    }
+    if (src_cluster_agent_id != top_cluster_agent_id) {
+        cluster_route = routeHelper(src_cluster_agent_id, top_cluster_agent_id, reverse_routing_dimensions);
+    }
+    if (top_cluster_agent_id != dest) {
+        agent_to_dest = routeHelper(top_cluster_agent_id, dest, normal_routing_dimensions);
+    }
+
+    // concatenate route while removing duplicate
+    auto final_route = route_to_agent;
+    if (!cluster_route.empty())
+    {
+        if (!final_route.empty())
+        {
+            cluster_route.pop_front();
+        }
+        final_route.splice(final_route.end(), cluster_route);
+    }
+    if (!agent_to_dest.empty())
+    {
+        if (!final_route.empty())
+        {
+            agent_to_dest.pop_front();
+        }
+        final_route.splice(final_route.end(), agent_to_dest);
+    }
+    return final_route;
+}
+
+Route MultiDimTopology::routeNormal(DeviceId src, DeviceId dest) const noexcept {
+        std::vector<int> routing_dimensions;
     for (int dim_to_transfer = dims_count - 1; dim_to_transfer >= 0; dim_to_transfer--) {
         routing_dimensions.push_back(dim_to_transfer);
     }
 
     // call
     return routeHelper(src, dest, routing_dimensions);
-
 }
+
 
 Route MultiDimTopology::routeHelper(DeviceId src, DeviceId dest, const std::vector<int>& routing_dimensions) const noexcept {
     //std::cout << "[DEBUG] Beginning of the function - source and destination: " << src << dest << std::endl;
@@ -233,7 +328,7 @@ void MultiDimTopology::make_connections() noexcept {
         const auto topology = m_topology_per_dim.at(dim).get();
         const auto policies = topology->get_connection_policies();
         assert(policies.size() != 0);
-        bool non_recursive = (non_recursive_topo.at(dim) == 1);
+        bool non_recursive = (m_non_recursive_topo.at(dim) == 1);
         std::vector<std::pair<MultiDimAddress, MultiDimAddress>> address_pairs;
 
         for (const auto& policy : policies) {
@@ -258,19 +353,15 @@ void MultiDimTopology::make_connections() noexcept {
                                       : translate_address_back(address_pair.second);
                 assert(0 <= src && src < devices_count);
                 assert(0 <= dest && dest < devices_count);
-                //simulate non_recursive topology
-                double scale_factor = 1.0;
-                //if(non_recursive_topo.at(dim) == 0){
-                //    scale_factor = 0.5;
-                //}
+                
 
                 // make connection
                 const auto bandwidth = bandwidth_per_dim.at(dim);
                 const auto latency = topology->get_link_latency();
                 if(fault_derate(src, dest) != 0)
-                    connect(src, dest, bandwidth * fault_derate(src, dest) * scale_factor, latency, false);
+                    connect(src, dest, bandwidth * fault_derate(src, dest), latency, false);
                 else
-                    connect(src, dest, bandwidth * scale_factor, latency, false);  //might be removable
+                    connect(src, dest, bandwidth, latency, false);  //might be removable
             }
         }
     }
@@ -461,7 +552,7 @@ void MultiDimTopology::make_non_recursive_connections() noexcept {
     const auto policies = topology->get_connection_policies();
     assert(!policies.empty());
 
-    bool recursive_dim = (non_recursive_topo.at(dim) == 1);
+    bool recursive_dim = (m_non_recursive_topo.at(dim) == 1);
 
         for (const auto& policy : policies) {
 

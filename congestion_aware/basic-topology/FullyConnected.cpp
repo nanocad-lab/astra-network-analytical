@@ -21,7 +21,7 @@ FullyConnected::FullyConnected(const int npus_count,
     assert(bandwidth > 0);
     assert(latency >= 0);
 
-    FullyConnected::basic_topology_type = TopologyBuildingBlock::Ring;
+    FullyConnected::basic_topology_type = TopologyBuildingBlock::FullyConnected;
 
 
     // fully-connect every src-dest pairs
@@ -30,9 +30,9 @@ FullyConnected::FullyConnected(const int npus_count,
             for (auto dest = 0; dest < npus_count; dest++) {
                 if (src != dest) {
                     if(fault_derate(src, dest) != 0)
-                        connect(src, dest, bandwidth * fault_derate(src, dest), latency, bidirectional);
+                        connect(src, dest, bandwidth * fault_derate(src, dest), latency, false);
                     else
-                        connect(src, dest, bandwidth, latency, bidirectional);  //might be removable
+                        connect(src, dest, bandwidth, latency, false);  //might be removable
                 }
             }
         }
