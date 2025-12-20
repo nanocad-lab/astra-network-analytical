@@ -47,22 +47,22 @@ KingMesh2D::KingMesh2D(const int npus_count,
                 if (row + 1 < dim) {
                     int down = (row + 1) * dim + col;
                     if(fault_derate(current, down) != 0)
-                        connect(current, down, bandwidth * fault_derate(current, down), latency, bidirectional);
+                        connect(current, down, bandwidth * fault_derate(current, down), latency, false);
                     else
-                        connect(current, down, bandwidth, latency, bidirectional);  //might be removable
+                        connect(current, down, bandwidth, latency, false);  //might be removable
                     if (col + 1 < dim){
                         int diag_right = (row + 1) * dim + (col + 1);
                         if(fault_derate(current, down) != 0)
-                            connect(current, diag_right, bandwidth * fault_derate(current, diag_right), latency, bidirectional);
+                            connect(current, diag_right, bandwidth * fault_derate(current, diag_right), latency, false);
                         else
-                            connect(current, diag_right, bandwidth, latency, bidirectional);  //might be removable
+                            connect(current, diag_right, bandwidth, latency, false);  //might be removable
                     }
                     if (col > 0){
                         int diag_left = (row + 1) * dim + (col - 1);
                         if(fault_derate(current, down) != 0)
-                            connect(current, diag_left, bandwidth * fault_derate(current, diag_left), latency, bidirectional);
+                            connect(current, diag_left, bandwidth * fault_derate(current, diag_left), latency, false);
                         else
-                            connect(current, diag_left, bandwidth, latency, bidirectional);  //might be removable
+                            connect(current, diag_left, bandwidth, latency, false);  //might be removable
                     }
                 }
             }

@@ -111,6 +111,9 @@ std::shared_ptr<Topology> NetworkAnalyticalCongestionAware::construct_topology(
             case TopologyBuildingBlock::Mesh2D:
                 dim_topology = std::make_unique<Mesh2D>(npus_count, bandwidth, latency, is_multi_dim);
                 break;
+            case TopologyBuildingBlock::KingMesh2D:
+                dim_topology = std::make_unique<KingMesh2D>(npus_count, bandwidth, latency, is_multi_dim);
+                break;
             case TopologyBuildingBlock::HyperCube:
                 dim_topology =
                     std::make_unique<HyperCube>(npus_count, bandwidth, latency, /* bidirectional = */ true, is_multi_dim);
