@@ -86,15 +86,26 @@ void NetworkParser::parse_network_config_yml(const YAML::Node& network_config) n
     npus_count_per_dim = parse_vector<int>(network_config["npus_count"]);
     bandwidth_per_dim = parse_vector<Bandwidth>(network_config["bandwidth"]);
     latency_per_dim = parse_vector<Latency>(network_config["latency"]);
-    if (network_config["non_recursive_topology"]) {
+    // Parse non_recursive_topo with format priority
+    if (network_config["non_recursive_from"]) {
+        // NEW FORMAT: crossover index - dimensions >= crossover are non-recursive
+        int crossover = network_config["non_recursive_from"].as<int>();
+        // Validate range
+        if (crossover < 0 || crossover > dims_count) {
+            std::cerr << "[Error] (network/analytical) " << "non_recursive_from (" << crossover
+                      << ") must be between 0 and dims_count (" << dims_count << ")" << std::endl;
+            std::exit(-1);
+        }
+        non_recursive_topo.resize(dims_count, 0);
+        for (int d = crossover; d < dims_count; d++) {
+            non_recursive_topo[d] = 1;
+        }
+    } else if (network_config["non_recursive_topology"]) {
+        // LEGACY FORMAT: explicit array [0, 0, 1, 1]
         non_recursive_topo = parse_vector<int>(network_config["non_recursive_topology"]);
-        //if (std::all_of(non_recursive_topo.begin(), non_recursive_topo.end(),
-        //            [](int x){ return x == 0; })) {
-        //std::fill(non_recursive_topo.begin(), non_recursive_topo.end(), 1);
-        //}
-    }
-    else{
-        std::fill(non_recursive_topo.begin(), non_recursive_topo.end(), 0);
+    } else {
+        // DEFAULT: all dimensions are recursive (no cluster mode)
+        non_recursive_topo.resize(dims_count, 0);
     }
 
     // check the validity of the parsed network config
@@ -209,6 +220,36 @@ void NetworkParser::check_validity() const noexcept {
             std::cerr << "[Error] (network/analytical) " << "latency (" << latency << ") should be non-negative"
                       << std::endl;
             std::exit(-1);
+        }
+    }
+
+    // Validate non_recursive_topo
+    if (!non_recursive_topo.empty()) {
+        // Size must match dims_count
+        if (non_recursive_topo.size() != dims_count) {
+            std::cerr << "[Error] (network/analytical) " << "length of non_recursive_topology ("
+                      << non_recursive_topo.size() << ") doesn't match with dims_count ("
+                      << dims_count << ")" << std::endl;
+            std::exit(-1);
+        }
+
+        // Values must be 0 or 1, and must be consecutive 0s followed by 1s
+        bool seen_one = false;
+        for (size_t i = 0; i < non_recursive_topo.size(); i++) {
+            int v = non_recursive_topo[i];
+            if (v != 0 && v != 1) {
+                std::cerr << "[Error] (network/analytical) "
+                          << "non_recursive_topology values must be 0 or 1, got " << v
+                          << " at dimension " << i << std::endl;
+                std::exit(-1);
+            }
+            if (seen_one && v == 0) {
+                std::cerr << "[Error] (network/analytical) "
+                          << "non_recursive_topology must be consecutive 0s followed by 1s. "
+                          << "Found 0 at dimension " << i << " after seeing 1." << std::endl;
+                std::exit(-1);
+            }
+            if (v == 1) seen_one = true;
         }
     }
 }
