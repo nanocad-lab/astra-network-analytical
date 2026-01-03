@@ -15,7 +15,7 @@ Switch::Switch(const int npus_count,
            const bool is_multi_dim,
            const std::vector<std::tuple<int, int, double>>& faulty_links) noexcept
     : bidirectional(bidirectional),
-      BasicTopology(npus_count, npus_count, bandwidth, latency, is_multi_dim),
+      BasicTopology(npus_count, npus_count+1, bandwidth, latency, is_multi_dim),
       faulty_links(faulty_links) {   // initialize faulty links
     assert(npus_count > 0);
     assert(bandwidth > 0);
@@ -29,10 +29,10 @@ Switch::Switch(const int npus_count,
     // connect npus and switches, the link should be bidirectional
     if (!is_multi_dim) {
         for (auto i = 0; i < npus_count; i++) {
-            if(fault_derate(i, i+1) != 0)
-                connect(i, i+1, bandwidth * fault_derate(i, i+1), latency, bidirectional);
+            if(fault_derate(i, switch_id) != 0)
+                connect(i, switch_id, bandwidth * fault_derate(i, switch_id), latency, bidirectional);
             else
-                connect(i, i+1, bandwidth, latency, bidirectional);  //might be removable
+                connect(i, switch_id, bandwidth, latency, bidirectional);  //might be removable
         }
     }
 }
