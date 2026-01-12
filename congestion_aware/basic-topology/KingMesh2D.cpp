@@ -10,6 +10,11 @@ LICENSE file in the root directory of this source tree.
 
 using namespace NetworkAnalyticalCongestionAware;
 
+
+const int npus_count_x = 8;         //MODIFY npus_ dimensions
+const int npus_count_y = 2;         //MODIFY npus_ dimensions
+
+
 KingMesh2D::KingMesh2D(const int npus_count,
                  const Bandwidth bandwidth,
                  const Latency latency,
@@ -27,16 +32,18 @@ KingMesh2D::KingMesh2D(const int npus_count,
 
     if (!is_multi_dim) {
         // Assume npus_count forms a perfect square
-        const int dim = static_cast<int>(std::sqrt(npus_count));
-        assert(dim * dim == npus_count && "2D Mesh requires a square grid");
+        const int dim_x = npus_count_x;
+        const int dim_y = npus_count_y;
 
-        for (int row = 0; row < dim; ++row) {
-            for (int col = 0; col < dim; ++col) {
-                int current = row * dim + col;
+        assert(dim_x * dim_y == npus_count && "KingMesh dimensions are not equal to npus count (topology)");
+
+        for (int row = 0; row < dim_y; ++row) {
+            for (int col = 0; col < dim_x; ++col) {
+                int current = row * dim_x + col;
 
                 // --- Connect right (no wrap-around) ---
-                if (col + 1 < dim) {
-                    int right = row * dim + (col + 1);
+                if (col + 1 < dim_x) {
+                    int right = row * dim_x + (col + 1);
                     if(fault_derate(current, right) != 0)
                         connect(current, right, bandwidth * fault_derate(current, right), latency, bidirectional);
                     else
@@ -44,25 +51,25 @@ KingMesh2D::KingMesh2D(const int npus_count,
                 } 
 
                 // --- Connect down (no wrap-around) ---
-                if (row + 1 < dim) {
-                    int down = (row + 1) * dim + col;
+                if (row + 1 < dim_y) {
+                    int down = (row + 1) * dim_x + col;
                     if(fault_derate(current, down) != 0)
-                        connect(current, down, bandwidth * fault_derate(current, down), latency, false);
-                    else
-                        connect(current, down, bandwidth, latency, false);  //might be removable
-                    if (col + 1 < dim){
-                        int diag_right = (row + 1) * dim + (col + 1);
+                        connect(current, down, bandwidth * fault_derate(current, down), latency, bidirectional);
+                    //else
+                        //connect(current, down, bandwidth, latency, false);  //might be removable
+                    if (col + 1 < dim_x){
+                        int diag_right = (row + 1) * dim_x + (col + 1);
                         if(fault_derate(current, down) != 0)
-                            connect(current, diag_right, bandwidth * fault_derate(current, diag_right), latency, false);
-                        else
-                            connect(current, diag_right, bandwidth, latency, false);  //might be removable
+                            connect(current, diag_right, bandwidth * fault_derate(current, diag_right), latency, bidirectional);
+                        //else
+                        //    connect(current, diag_right, bandwidth, latency, bidirectional);  //might be removable
                     }
                     if (col > 0){
-                        int diag_left = (row + 1) * dim + (col - 1);
+                        int diag_left = (row + 1) * dim_x + (col - 1);
                         if(fault_derate(current, down) != 0)
-                            connect(current, diag_left, bandwidth * fault_derate(current, diag_left), latency, false);
-                        else
-                            connect(current, diag_left, bandwidth, latency, false);  //might be removable
+                            connect(current, diag_left, bandwidth * fault_derate(current, diag_left), latency, bidirectional);
+                        //else
+                        //    connect(current, diag_left, bandwidth, latency, bidirectional);  //might be removable
                     }
                 }
             }
@@ -84,17 +91,19 @@ KingMesh2D::KingMesh2D(const int npus_count,
 
 Route KingMesh2D::route(DeviceId src, DeviceId dest) const noexcept {
     Route route;
-    const int dim = static_cast<int>(std::sqrt(npus_count));
-    assert(dim * dim == npus_count && "KingMesh2D requires perfect square npus_count");
+    const int dim_x = npus_count_x;
+    const int dim_y = npus_count_y;
 
-    int sx = src % dim, sy = src / dim;
-    int dx = dest % dim, dy = dest / dim;
+    assert(dim_x * dim_y == npus_count && "KingMesh2D requires perfect square npus_count");
+
+    int sx = src % dim_x, sy = src / dim_x;
+    int dx = dest % dim_x, dy = dest / dim_x;
 
     route.push_back(devices.at(src));
     int cur = src;
-
+    std::cout<<"src and dest are: "<<src<<"and"<<dest<<std::endl;
     while (cur != dest) {
-        int cx = cur % dim, cy = cur / dim;
+        int cx = cur % dim_x, cy = cur / dim_x;
 
         int step_x = 0, step_y = 0;
         if (cx < dx) step_x = +1;
@@ -108,8 +117,8 @@ Route KingMesh2D::route(DeviceId src, DeviceId dest) const noexcept {
         if (step_x != 0 && step_y != 0) {
             int nx = cx + step_x;
             int ny = cy + step_y;
-            if (nx >= 0 && nx < dim && ny >= 0 && ny < dim) {
-                next = ny * dim + nx;
+            if (nx >= 0 && nx < dim_x && ny >= 0 && ny < dim_y) {
+                next = ny * dim_x + nx;
                 // If diagonal link is faulty, fallback to single-axis move
                 if (fault_derate(cur, next) == 0.0) {
                     // Prefer maintaining the same general direction
@@ -117,15 +126,15 @@ Route KingMesh2D::route(DeviceId src, DeviceId dest) const noexcept {
                     int ny_alt = cy + step_y;
 
                     bool moved = false;
-                    if (nx_alt >= 0 && nx_alt < dim) {
-                        int next_x = cy * dim + nx_alt;
+                    if (nx_alt >= 0 && nx_alt < dim_x) {
+                        int next_x = cy * dim_x + nx_alt;
                         if (fault_derate(cur, next_x) != 0.0) {
                             next = next_x;
                             moved = true;
                         }
                     }
-                    if (!moved && ny_alt >= 0 && ny_alt < dim) {
-                        int next_y = ny_alt * dim + cx;
+                    if (!moved && ny_alt >= 0 && ny_alt < dim_y) {
+                        int next_y = ny_alt * dim_x + cx;
                         if (fault_derate(cur, next_y) != 0.0) {
                             next = next_y;
                             moved = true;
@@ -142,32 +151,32 @@ Route KingMesh2D::route(DeviceId src, DeviceId dest) const noexcept {
         if (next == -1) {
             if (step_x != 0) {
                 int nx = cx + step_x;
-                if (nx >= 0 && nx < dim) {
-                    next = cy * dim + nx;
+                if (nx >= 0 && nx < dim_x) {
+                    next = cy * dim_x + nx;
                     if (fault_derate(cur, next) == 0.0) {
                         // Detour vertically (same direction if possible)
                         int ny_up = cy + 1;
                         int ny_down = cy - 1;
-                        if (ny_up < dim && fault_derate(cur, ny_up * dim + cx) != 0.0)
-                            next = ny_up * dim + cx;
-                        else if (ny_down >= 0 && fault_derate(cur, ny_down * dim + cx) != 0.0)
-                            next = ny_down * dim + cx;
+                        if (ny_up < dim_y && fault_derate(cur, ny_up * dim_x + cx) != 0.0)
+                            next = ny_up * dim_x + cx;
+                        else if (ny_down >= 0 && fault_derate(cur, ny_down * dim_x + cx) != 0.0)
+                            next = ny_down * dim_x + cx;
                         else
                             break;
                     }
                 }
             } else if (step_y != 0) {
                 int ny = cy + step_y;
-                if (ny >= 0 && ny < dim) {
-                    next = ny * dim + cx;
+                if (ny >= 0 && ny < dim_y) {
+                    next = ny * dim_x + cx;
                     if (fault_derate(cur, next) == 0.0) {
                         // Detour horizontally (same direction if possible)
                         int nx_right = cx + 1;
                         int nx_left = cx - 1;
-                        if (nx_right < dim && fault_derate(cur, cy * dim + nx_right) != 0.0)
-                            next = cy * dim + nx_right;
-                        else if (nx_left >= 0 && fault_derate(cur, cy * dim + nx_left) != 0.0)
-                            next = cy * dim + nx_left;
+                        if (nx_right < dim_x && fault_derate(cur, cy * dim_x + nx_right) != 0.0)
+                            next = cy * dim_x + nx_right;
+                        else if (nx_left >= 0 && fault_derate(cur, cy * dim_x + nx_left) != 0.0)
+                            next = cy * dim_x + nx_left;
                         else
                             break;
                     }
@@ -188,13 +197,15 @@ Route KingMesh2D::route(DeviceId src, DeviceId dest) const noexcept {
 std::vector<ConnectionPolicy> KingMesh2D::get_connection_policies() const noexcept {
     std::vector<ConnectionPolicy> policies;
 
-    const int dim = static_cast<int>(std::sqrt(npus_count));
-    assert(dim * dim == npus_count && "KingMesh2D requires npus_count to be a perfect square");
+    const int dim_x = npus_count_x;
+    const int dim_y = npus_count_y;
+
+    assert(dim_x * dim_y == npus_count && "KingMesh2D requires npus_count to be a perfect square");
 
     // --- Each node connects to its 8-neighborhood (no wrap-around) ---
-    for (int row = 0; row < dim; ++row) {
-        for (int col = 0; col < dim; ++col) {
-            int current = row * dim + col;
+    for (int row = 0; row < dim_y; ++row) {
+        for (int col = 0; col < dim_x; ++col) {
+            int current = row * dim_x + col;
 
             // Explore all 8 directions
             for (int dy = -1; dy <= 1; ++dy) {
@@ -206,8 +217,8 @@ std::vector<ConnectionPolicy> KingMesh2D::get_connection_policies() const noexce
                     int new_col = col + dx;
 
                     // Boundary check (no wrap-around)
-                    if (new_row >= 0 && new_row < dim && new_col >= 0 && new_col < dim) {
-                        int neighbor = new_row * dim + new_col;
+                    if (new_row >= 0 && new_row < dim_y && new_col >= 0 && new_col < dim_x) {
+                        int neighbor = new_row * dim_x + new_col;
                         policies.emplace_back(current, neighbor);
                     }
                 }
@@ -244,4 +255,3 @@ double KingMesh2D::fault_derate(int src, int dst) const{
     }
     return 1.0;
 }
-
